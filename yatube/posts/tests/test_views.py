@@ -1,11 +1,9 @@
-from django.contrib.auth import get_user_model
+from django import forms
 from django.test import Client, TestCase
 from django.urls import reverse
-from django import forms
 
-from ..models import Group, Post
-
-User = get_user_model()
+from ..consts import POSTS_IN_PAGE
+from ..models import Group, Post, User
 
 
 class PostPagesTests(TestCase):
@@ -24,7 +22,7 @@ class PostPagesTests(TestCase):
             text='Тестовый пост',
             group=cls.group,
         )
-        for i in range(12):
+        for i in range(POSTS_IN_PAGE):
             Post.objects.create(
                 author=cls.user,
                 text='Тестовый пост',
@@ -99,8 +97,8 @@ class PostPagesTests(TestCase):
 
     def test_first_page_contains_ten_records(self):
         response = self.client.get(reverse('posts:index'))
-        self.assertEqual(len(response.context['page_obj']), 10)
+        self.assertEqual(len(response.context['page_obj']), POSTS_IN_PAGE)
 
     def test_second_page_contains_tree_records(self):
         response = self.client.get(reverse('posts:index') + '?page=2')
-        self.assertEqual(len(response.context['page_obj']), 3)
+        self.assertEqual(len(response.context['page_obj']), 1)

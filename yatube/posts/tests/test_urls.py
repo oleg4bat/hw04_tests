@@ -1,9 +1,8 @@
-from django.contrib.auth import get_user_model
+from http import HTTPStatus
+
 from django.test import Client, TestCase
 
-from ..models import Group, Post
-
-User = get_user_model()
+from ..models import Group, Post, User
 
 
 class PostURLTests(TestCase):
@@ -26,10 +25,15 @@ class PostURLTests(TestCase):
         cls.authorized_client1 = Client()
         cls.authorized_client1.force_login(cls.user1)
         cls.authorized_client.force_login(cls.user)
-
-    def test_urls_uses_correct_template(self):
-        """URL-адрес использует соответствующий шаблон."""
-        templates_url_names = {
+        cls.access = {
+            '/': 'all',
+            f'/group/{cls.group.slug}/': 'all',
+            f'/profile/{cls.user.username}/': 'all',
+            f'/posts/{cls.post.pk}/': 'all',
+            f'/posts/{cls.post.pk}/edit/': 'author',
+            '/create/': 'authorized',
+        }
+        cls.templates_url_names = {
             '/': 'posts/index.html',
             '/group/test-slug/': 'posts/group_list.html',
             '/profile/HasNoName/': 'posts/profile.html',
@@ -37,44 +41,71 @@ class PostURLTests(TestCase):
             '/posts/1/edit/': 'posts/create_post.html',
             '/create/': 'posts/create_post.html',
         }
-        for address, template in templates_url_names.items():
+
+    def test_urls_uses_correct_template(self):
+        """URL-адрес использует соответствующий шаблон."""
+        for address, template in self.templates_url_names.items():
             with self.subTest(address=address):
                 response = self.authorized_client.get(address)
                 self.assertTemplateUsed(response, template)
 
-    def test_urls_exist_at_desired_location(self):
-        """Страницы доступна любому пользователю."""
-        urls = {
-            '/': 200,
-            '/group/test-slug/': 200,
-            '/profile/HasNoName/': 200,
-            '/posts/1/': 200,
-            '/posts/1/edit/': 302,
-            '/create/': 302,
-        }
-        for address, status in urls.items():
-            with self.subTest(address=address):
-                response = self.guest_client.get(address)
-                self.assertEqual(response.status_code, status)
+    def test_urls_access_for_author(self):
+        """Проверка страниц доступных автору"""
+        for address, access, in self.access.items():
+            if access == 'authorized':
+                with self.subTest(address=address):
+                    response = self.authorized_client.get(address)
+                    self.assertEqual(response.status_code, HTTPStatus.OK)
+            if access == 'all':
+                with self.subTest(address=address):
+                    response = self.authorized_client.get(address)
+                    self.assertEqual(response.status_code, HTTPStatus.OK)
+            if access == 'author':
+                with self.subTest(address=address):
+                    response = self.authorized_client.get(address)
+                    self.assertEqual(response.status_code, HTTPStatus.OK)
 
-    def test_create_url_redirect_anonymous_on_login(self):
-        response = PostURLTests.guest_client.get(
-            '/create/', follow=True)
-        self.assertRedirects(
-            response, ('/auth/login/?next=/create/'))
+    def test_urls_access_for_guest(self):
+        """Проверка страниц доступных гостю"""
+        for address, access, in self.access.items():
+            if access == 'authorized':
+                with self.subTest(address=address):
+                    response = self.guest_client.get(address)
+                    self.assertEqual(response.status_code,
+                                     HTTPStatus.FOUND)
+                    self.assertRedirects(response,
+                                         ('/auth/login/?next=/create/'))
+            if access == 'all':
+                with self.subTest(address=address):
+                    response = self.guest_client.get(address)
+                    self.assertEqual(response.status_code, HTTPStatus.OK)
+            if access == 'author':
+                with self.subTest(address=address):
+                    response = self.guest_client.get(address)
+                    self.assertEqual(response.status_code,
+                                     HTTPStatus.FOUND)
+                    self.assertRedirects(response,
+                                         ('/auth/login/?next=/posts/1/edit/'))
 
-    def test_post_edit_url_redirect_anonymous_on_login(self):
-        response = PostURLTests.guest_client.get(
-            '/posts/1/edit/', follow=True)
-        self.assertRedirects(
-            response, ('/auth/login/?next=/posts/1/edit/'))
-
-    def test_post_edit_url_redirect_not_author_on_detail(self):
-        response = PostURLTests.authorized_client1.get(
-            '/posts/1/edit/', follow=True)
-        self.assertRedirects(
-            response, ('/posts/1/'))
+    def test_urls_access_for_authorized(self):
+        """Проверка страниц доступных авторизованному"""
+        for address, access, in self.access.items():
+            if access == 'authorized':
+                with self.subTest(address=address):
+                    response = self.authorized_client1.get(address)
+                    self.assertEqual(response.status_code,
+                                     HTTPStatus.OK)
+            if access == 'all':
+                with self.subTest(address=address):
+                    response = self.authorized_client1.get(address)
+                    self.assertEqual(response.status_code, HTTPStatus.OK)
+            if access == 'author':
+                with self.subTest(address=address):
+                    response = self.authorized_client1.get(address)
+                    self.assertEqual(response.status_code,
+                                     HTTPStatus.FOUND)
+                    self.assertRedirects(response, (f'/posts/{self.post.pk}/'))
 
     def test_unexisting_page(self):
         response = self.guest_client.get('/unexisting_page/')
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, HTTPStatus.NOT_FOUND)

@@ -1,11 +1,8 @@
-from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from ..models import Post
 from ..forms import PostForm
-
-User = get_user_model()
+from ..models import Post, User
 
 
 class TaskCreateFormTests(TestCase):
@@ -18,6 +15,7 @@ class TaskCreateFormTests(TestCase):
             author=cls.user,
             text='Тестовый пост',
         )
+        cls.guest_client = Client()
         cls.authorized_client = Client()
         cls.authorized_client.force_login(cls.user)
 
@@ -42,6 +40,20 @@ class TaskCreateFormTests(TestCase):
             ).exists()
         )
 
+    def test_geust_cant_create(self):
+        """Валидная форма создает запись в Post."""
+        tasks_count = Post.objects.count()
+        form_data = {
+            'text': 'текст',
+        }
+        response = self.guest_client.post(
+            reverse('posts:post_create'),
+            data=form_data,
+            follow=True
+        )
+        self.assertRedirects(response, '/auth/login/?next=/create/')
+        self.assertEqual(Post.objects.count(), tasks_count)
+
     def test_post_edit(self):
         form_data = {
             'text': 'слово',
@@ -54,8 +66,17 @@ class TaskCreateFormTests(TestCase):
         self.assertRedirects(response, reverse(
             'posts:post_detail', kwargs={'post_id': 1})
         )
-        self.assertTrue(
-            Post.objects.filter(
-                text='слово',
-            ).exists()
+        self.assertEqual(Post.objects.first().text, form_data['text'])
+
+    def test_geust_cant_edit(self):
+        """Валидная форма создает запись в Post."""
+        form_data = {
+            'text': 'слово',
+        }
+        response = self.guest_client.post(
+            reverse('posts:post_edit', kwargs={'post_id': 1}),
+            data=form_data,
+            follow=True
         )
+        self.assertRedirects(response, ('/auth/login/?next=/posts/1/edit/'))
+        self.assertEqual(Post.objects.first().text, self.post.text)

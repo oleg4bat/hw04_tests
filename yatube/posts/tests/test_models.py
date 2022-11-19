@@ -1,9 +1,6 @@
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from ..models import Group, Post
-
-User = get_user_model()
+from ..models import SLICE_OF_TEXT, Group, Post, User
 
 
 class PostModelTest(TestCase):
@@ -24,7 +21,7 @@ class PostModelTest(TestCase):
     def test_post_have_correct_object_names(self):
         """Проверяем, что у моделей корректно работает __str__."""
         post = PostModelTest.post
-        text = PostModelTest.post.text[:15]
+        text = PostModelTest.post.text[:SLICE_OF_TEXT]
         self.assertEqual(
             str(post), text, '__str__ выводит неправильную инфомацию'
         )
